@@ -1,5 +1,5 @@
 ## Business context (brief)
-Reduce complaints caused by duplicate transfers.
+Improve customer transactions
 
 ## Feature request / user story
 As a user, I want to confirm a transfer before sending it
