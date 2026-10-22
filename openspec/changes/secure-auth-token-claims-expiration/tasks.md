@@ -1,26 +1,30 @@
 # Tasks
 
+Status: APPROVED by the user on 2026-10-21 for Issue #13/H-04. `client` remains optional and ignored. Issue #22/H-01 is out of scope.
+
 Scope: GitHub Issue [#13](https://github.com/user-bcp-student29/workshop-auth-backend/issues/13) and the approved `auth-token` spec.
 
 ## 1. Characterize Current Login Behavior
 
-- [ ] 1.1 Add endpoint characterization tests for the current successful response fields and documented null-request, missing/blank username or password, and invalid-credentials responses; verify them with `mvn -Dtest=AuthResourceTest test` before changing production behavior.
-- [ ] 1.2 Characterize the current omitted-`client` acceptance and nominal 3600-second `expiresIn` without asserting or logging the legacy token contents; verify the focused test passes and retain the result as baseline evidence.
+- [x] 1.1 Add endpoint characterization tests for the current successful response fields and documented null-request, missing/blank username or password, and invalid-credentials responses; verified with `mvn -Dtest=AuthResourceTest test` before changing production behavior.
+- [x] 1.2 Characterize the current omitted-`client` acceptance and nominal 3600-second `expiresIn` without asserting or logging the legacy token contents; the focused test passes and the result is recorded below.
+
+Execution evidence: `mvn -Dtest=AuthResourceTest test` — Surefire reports 10 tests, 0 failures, 0 errors, 0 skipped. The run emitted JaCoCo/JDK instrumentation and JBoss Threads module-access warnings, but the test set completed successfully. The pre-change baseline was 1 test, 0 failures, 0 errors, 0 skipped.
 
 ## 2. Establish JWT Signing and Verification
 
-- [ ] 2.1 Add the Quarkus-supported SmallRye JWT capability and test-only signing configuration without a checked-in production secret; verify the application test profile starts with `mvn test`.
-- [ ] 2.2 Replace the legacy token construction with signed `sub`, `client`, `iat`, and `exp` claims derived from one controllable clock instant; verify a focused test validates the signature, claim values, and 3600-second nominal lifetime.
-- [ ] 2.3 Require externally supplied `AUTH_TOKEN_SECRET` outside tests and fail closed when it is absent or invalid; verify configuration tests demonstrate that non-test signing cannot fall back to a built-in secret.
-- [ ] 2.4 Exercise token verification with valid, tampered, and expired tokens, including rejection at `exp`; verify focused verifier tests pass without adding a new HTTP endpoint.
+- [x] 2.1 Add the Quarkus-supported SmallRye JWT capability and test-only HS256 signing configuration without a checked-in production secret; verified the application test profile starts with `mvn test` (10 tests, 0 failures, 0 errors, 0 skipped).
+- [x] 2.2 Replace the legacy token construction with signed identity and expiry claims derived from one controllable clock instant; verified with `mvn -Dtest=JwtTokenServiceTest test` (1 test, 0 failures, 0 errors). Do not add a `client` claim.
+- [x] 2.3 Require externally supplied `AUTH_TOKEN_SECRET` outside tests and fail closed when it is absent or invalid; verified with `mvn '-Dtest=JwtTokenServiceTest,JwtTokenConfigurationTest,JwtTokenMissingSecretTest' test` (5 tests, 0 failures, 0 errors), covering valid key, invalid key location, and absent secret.
+- [x] 2.4 Exercise token verification with valid, tampered, and expired tokens, including rejection at `exp`; verified with `mvn -Dtest=JwtTokenServiceTest test` (3 tests, 0 failures, 0 errors), without adding an HTTP endpoint.
 
 ## 3. Integrate the Contract Into Login
 
-- [ ] 3.1 Require a nonblank `client` before issuing a token and preserve its exact submitted value in the claim; verify missing, null, empty, and whitespace-only values return 400 with no token, while a valid client produces the expected claim.
-- [ ] 3.2 Preserve the documented successful response fields and existing 400/401/500 behavior while changing token format; verify the endpoint characterization tests from Task Group 1 pass after updating only the intentionally changed omitted-client expectation.
-- [ ] 3.3 Add log-capture coverage for successful and failed login/token evaluation and prevent token or secret values from appearing; verify the tests inspect captured application logs without printing the sensitive values.
-- [ ] 3.4 Update `docs/ENDPOINTS.md` with the required `client`, signed-token claims, `expiresIn` tolerance, and `AUTH_TOKEN_SECRET` configuration; verify each documented behavior matches the approved spec and the issue's scope.
+- [x] 3.1 Preserve `client` as optional and ignored during login and token issuance; verified with `mvn '-Dtest=AuthResourceTest,JwtTokenServiceTest' test` (13 tests, 0 failures, 0 errors), including successful login with/without `client` and absence of the claim.
+- [x] 3.2 Preserve the documented successful response fields and existing 400/401/500 behavior while changing token format; verified with `mvn '-Dtest=AuthResourceTest,AuthResourceErrorTest' test` (11 tests, 0 failures, 0 errors). The omitted-`client` expectation remains unchanged.
+- [x] 3.3 Add log-capture coverage for successful and failed login/token evaluation and prevent token or secret values from appearing; verified with `mvn -Dtest=AuthTokenLoggingTest test` (1 test, 0 failures, 0 errors). Captured logs contain neither the issued token nor test key material.
+- [x] 3.4 Update `docs/ENDPOINTS.md` with the optional, ignored `client` behavior, signed-token identity and expiry claims, 3600-second `expiresIn`, and `AUTH_TOKEN_SECRET` configuration; verified against the approved spec and Issue #13 scope with `mvn '-Dtest=AuthResourceTest,AuthResourceErrorTest' test` (11 tests passed).
 
 ## 4. Integration Verification
 
-- [ ] 4.1 Run the full Maven test suite and `openspec validate secure-auth-token-claims-expiration`; verify both complete successfully and all protected response/error contracts remain covered.
+- [x] 4.1 Run the full Maven test suite and `openspec validate secure-auth-token-claims-expiration`; both passed. Surefire: 17 tests, 0 failures, 0 errors, 0 skipped; OpenSpec validation: 1 change passed, 0 failed.

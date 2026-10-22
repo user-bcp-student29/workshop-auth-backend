@@ -22,7 +22,7 @@ Campos del body JSON:
 |---|---|---|---|
 | username | string | Si | Usuario de login. Si viene nulo, vacio o en blanco, responde 400. |
 | password | string | Si | Contrasena del usuario. Si viene nula, vacia o en blanco, responde 400. |
-| client | string | No | Campo aceptado por el contrato de entrada, pero no participa en la logica de autenticacion actual. |
+| client | string | No | Campo opcional ignorado por la autenticacion y por la emision del token. |
 
 Ejemplo JSON real y completo:
 
@@ -42,8 +42,8 @@ Campos del body JSON:
 
 | campo | tipo | descripcion |
 |---|---|---|
-| token | string | Token generado con la logica actual (Base64 de username, role, exp y secreto). |
-| expiresIn | integer | Tiempo de expiracion expresado en segundos (valor fijo actual: 3600). |
+| token | string | Token JWT firmado con HS256. Contiene la identidad autenticada (`sub`), rol (`role`), issuer (`iss`), instante de emision (`iat`) y expiracion (`exp`). El material de firma no se incluye en el token. |
+| expiresIn | integer | Tiempo nominal de expiracion en segundos: `3600`, coherente con la diferencia entre `exp` e `iat`. |
 | user | object | Datos del usuario autenticado. |
 | user.username | string | Username persistido del usuario autenticado. |
 | user.displayName | string | Nombre de despliegue del usuario (escapado en HTML). |
@@ -54,7 +54,7 @@ Ejemplo JSON real y completo:
 
 ```json
 {
-  "token": "c3R1ZGVudHxTVFVERU5UfDE3OTI0ODY5NTh8V09SS1NIT1BfU0VDUkVUXzIwMjY=",
+  "token": "<signed-jwt>",
   "expiresIn": 3600,
   "user": {
     "username": "student",
@@ -122,7 +122,8 @@ Pregunta abierta:
 
 ### 6) Notas de seguridad relevantes
 
-- El token actual no es JWT firmado; se construye como Base64 de datos concatenados con secreto embebido y expiracion de 3600 segundos.
+- El token es un JWT firmado con HS256; sus claims de identidad y expiracion son verificables y el token no contiene la clave de firma.
+- `AUTH_TOKEN_SECRET` debe apuntar a un archivo JWK externo al repositorio que contiene la clave simetrica. No hay una clave por defecto; si falta o no es valida, la emision del token falla.
 - La respuesta de error 500 expone detalles internos (mensaje y clase de excepcion).
 - CORS esta habilitado de forma permisiva en configuracion.
 

@@ -1,5 +1,7 @@
 # Design
 
+> Estado: APROBADO POR LA PERSONA USUARIA el 2026-10-21 para el Issue #13/H-04. `client` permanece opcional.
+
 ## Context
 
 See [proposal.md](proposal.md) for motivation and scope, and [specs/auth-token/spec.md](specs/auth-token/spec.md) for the normative behavior.
@@ -12,7 +14,7 @@ See [proposal.md](proposal.md) for motivation and scope, and [specs/auth-token/s
 
 - Introduce a standard, verifiable signed-token format without adding a token-consumer endpoint.
 - Make signing configuration explicit and fail closed when a non-test environment lacks its secret.
-- Preserve the documented login response and errors except for the deliberate `client` requirement and the token semantics in the spec.
+- Preserve the documented login request and response behavior; the token semantics in the spec are the only intentional behavior change.
 - Make time-dependent claim and expiry behavior deterministic in tests.
 
 **Non-Goals:**
@@ -25,7 +27,7 @@ See [proposal.md](proposal.md) for motivation and scope, and [specs/auth-token/s
 
 - Preserve `POST /auth/login`, its 200 response fields (`token`, `expiresIn`, `user.username`, `user.displayName`, `user.role`, and `debug`), and the documented 400, 401, and 500 response behavior.
 - Preserve the existing 3600-second nominal lifetime. `expiresIn` and the token expiry must agree within the one-second tolerance in the spec.
-- Require `client` only for successful token issuance, as specified. Missing/blank `client` is the one intentional request-compatibility break from Day 1; do not add a client allowlist or normalize the value silently.
+- Preserve `client` as an optional, currently ignored request field. Do not require it, validate it, or add it as a token claim.
 - Keep `/q/health` unchanged.
 
 ## Components Affected
@@ -67,14 +69,13 @@ Alternatives considered:
 - Call the system clock separately for issue time, expiry, and response duration: rejected because rounding and call timing can produce intermittent mismatches at the one-second boundary.
 - Add a clock-skew grace period: rejected because it conflicts with the explicit expiry boundary in the spec.
 
-### Keep claim mapping narrow and client validation explicit
+### Keep token claims limited to the confirmed identity and expiry behavior
 
-Set `sub` to the authenticated username and `client` to the exact supplied value after rejecting null, empty, or whitespace-only input. Do not trim or rewrite a valid client value, and do not invent an allowlist. Preserve the existing response `user.role`; the token does not gain claims beyond those required by the spec.
+Set `sub` to the authenticated username and provide a verifiable expiry. Keep `client` optional and ignored, as documented; do not validate it or add it as a token claim. Preserve the existing response `user.role`; the token does not gain claims beyond those required by the spec.
 
 Alternatives considered:
 
-- Make `client` optional for compatibility: rejected because it cannot satisfy the required client claim and the approved spec records the breaking change.
-- Normalize or allowlist clients: rejected because neither behavior is required by the Issue or current contract.
+- Require or add `client` as a token claim: rejected because this conflicts with the approved contract, which keeps the request field optional and ignored.
 
 ### Verify expiry at the token-verification boundary, not through a new endpoint
 
@@ -91,7 +92,7 @@ Before changing login or token behavior, establish and record the existing basel
 
 - A successful login's status and documented response fields, including `user` and `debug`.
 - The documented 400 behavior for null request and missing/blank username or password, plus 401 for invalid credentials.
-- The current acceptance of an omitted `client`, explicitly as baseline evidence only; replace this expectation with the specified 400 behavior when the intentional breaking change is introduced.
+- The current acceptance of an omitted `client`, preserving this behavior throughout the change.
 - The current token lifetime/response behavior without emitting tokens or secrets to test logs.
 
 Do not freeze the old Base64 representation as a permanent compatibility requirement. After the baseline is captured, update/add tests for signature verification and required claims, exact client mapping, 3600-second expiry and `expiresIn` tolerance, expiry rejection at the boundary, missing-secret failure outside tests, and log redaction. Retain characterization coverage for the protected response and error contracts throughout.
@@ -105,15 +106,15 @@ Do not freeze the old Base64 representation as a permanent compatibility require
 
 ## Risks / Trade-offs
 
-- **Existing clients may decode the legacy Base64 value or omit `client`** -> Treat the format and required-client change as a documented breaking contract; identify consumers and coordinate their update before rollout. Existing responses are not silently dual-formatted.
+- **Existing clients may decode the legacy Base64 value** -> Treat the token format change as a documented breaking contract and coordinate consumer updates before rollout. The `client` request field remains optional and ignored.
 - **A weak or missing HMAC secret can undermine every token** -> Require externally provisioned strong secret material and fail closed outside tests; never log its value.
 - **JWT support adds dependencies and configuration surface** -> Use the Quarkus-managed SmallRye JWT integration and keep the token boundary limited to login issuance and verification.
 - **No current API consumes tokens** -> Verify expiry directly at the token-verification boundary; do not imply that login alone protects future endpoints.
 - **The current 500 body exposes exception information** -> Preserve it for this scoped change as required by the existing contract; track its remediation separately rather than silently changing behavior here.
-- **Characterization can accidentally preserve insecure behavior** -> Use baseline tests to document current behavior before the change, then explicitly replace only the assertions that conflict with the approved spec.
+- **Characterization can accidentally preserve insecure behavior** -> Use baseline tests to document current behavior before the change, then explicitly replace only the assertions that conflict with the draft spec.
 
 ## Migration Plan and Rollback
 
-Provision `AUTH_TOKEN_SECRET` in the target environment before deploying the new issuer. Deploy the new issuer and its verifier together; consumers must treat the new token as an opaque signed JWT and clients must send a nonblank `client`. No database migration is required. Previously issued legacy tokens are not accepted by the new verifier and clients must obtain new tokens after deployment.
+Provision `AUTH_TOKEN_SECRET` in the target environment before deploying the new issuer. Deploy the new issuer and its verifier together; consumers must treat the new token as an opaque signed token. The optional `client` request field remains optional and ignored. No database migration is required. Previously issued legacy tokens are not accepted by the new verifier and clients must obtain new tokens after deployment.
 
 Rollback is conditional. In an isolated laboratory, the previous release can be redeployed if needed, with the understanding that it restores the insecure legacy token behavior. Do not roll back a production deployment to the embedded-secret implementation. If the new release cannot operate safely, disable login or roll forward with a fix; preserve the configured secret and avoid logging it. Because the application currently has no token-consuming endpoint, there is no server-side token store to migrate or restore.

@@ -2,68 +2,41 @@
 
 ## Purpose
 
-Defines the externally observable contract for authentication tokens issued by login, including identity and client claims, expiration, secret handling, and protection of sensitive values in logs.
+Approved requirement for the externally observable integrity, identity, and expiry behavior of the authentication token issued by login, based on confirmed finding H-04. Approved by the user on 2026-10-21 for Issue #13; Issue #22/H-01 is outside scope.
 
 ## ADDED Requirements
 
-### Requirement: Successful login issues a signed token with required claims
-The system MUST return a verifiably signed token for successful login containing `sub`, `client`, `iat`, and `exp`. `sub` MUST identify the authenticated username, and `client` MUST equal the validated request value.
+### Requirement: Successful login issues a token with verifiable integrity
+The system MUST return a token whose integrity and authenticated identity can be verified. The token MUST represent the identity authenticated by `POST /auth/login`, provide a verifiable expiry, and MUST NOT expose the embedded secret as decodable token data.
 
-#### Scenario: Login returns an identifiable token
-- **WHEN** a user submits valid credentials and a nonblank client value
-- **THEN** the response is 200 and the token has a valid signature, `sub` equal to the authenticated username, `client` equal to the submitted value, and issue and expiry times with `exp` later than `iat`
+#### Scenario: Successful login returns a verifiable token
+- **WHEN** a user submits valid credentials
+- **THEN** the response is 200 and the returned token has verifiable integrity, represents the authenticated user's identity, and provides a verifiable expiry
+- **AND** decoding the token does not disclose the embedded secret
 
-### Requirement: Token lifetime and response duration agree
-The system MUST preserve the existing nominal lifetime of 3600 seconds, and `expiresIn` MUST equal the remaining lifetime represented by `exp` within one second.
+### Requirement: Invalid or expired tokens are rejected
+At the token-verification boundary, the system MUST accept a valid token and reject an invalid, modified, or expired token.
 
-#### Scenario: Successful login reports the token's remaining lifetime
-- **WHEN** a successful login response is produced
-- **THEN** `expiresIn` represents `exp - now` within one second and the token's nominal lifetime is 3600 seconds
+#### Scenario: Valid token is verified
+- **WHEN** a token with valid integrity and an unexpired expiry is evaluated
+- **THEN** it is accepted and its authenticated identity can be verified
 
-### Requirement: Client is validated for token issuance
-The system MUST reject a login request with a missing or blank `client` rather than issue a token without a valid client claim. This changes the Day 1 request contract, which described `client` as optional and ignored.
+#### Scenario: Modified or invalid token is rejected
+- **WHEN** a token is modified or otherwise fails integrity verification
+- **THEN** it is rejected
 
-#### Scenario: Client is missing
-- **WHEN** the request has valid username and password but omits `client`
-- **THEN** login returns 400 and no token is issued
-
-#### Scenario: Client is blank
-- **WHEN** the request has valid username and password but `client` is null, empty, or whitespace-only
-- **THEN** login returns 400 and no token is issued
-
-### Requirement: Expired tokens are rejected
-The system MUST treat a token as invalid when its expiry time is at or before the time it is evaluated.
-
-#### Scenario: Token is evaluated after expiry
-- **WHEN** a token with an otherwise valid signature is evaluated at or after `exp`
+#### Scenario: Expired token is rejected
+- **WHEN** a token is evaluated at or after its expiry
 - **THEN** the token is rejected as expired
 
-### Requirement: Non-laboratory signing does not use an implicit secret
-The system MUST NOT sign non-laboratory tokens with an implicit built-in default secret. Any retained laboratory-only default MUST be explicitly documented as laboratory-only.
-
-#### Scenario: Non-laboratory token signing
-- **WHEN** the service issues a token in a non-laboratory configuration
-- **THEN** signing uses the configured `AUTH_TOKEN_SECRET` and not a built-in default
-
-### Requirement: Sensitive token values are not logged
-The system MUST NOT write authentication tokens or the signing secret to application logs during login or token evaluation.
-
-#### Scenario: Successful login logging
-- **WHEN** a login succeeds and its token is issued
-- **THEN** application logs contain neither the returned token nor the signing secret
-
-#### Scenario: Failed login logging
-- **WHEN** login or token evaluation fails
-- **THEN** application logs contain neither an authentication token nor the signing secret
-
-### Requirement: Existing login response and error behavior is preserved
-Except for the `client` requirement and token semantics defined above, login MUST preserve the Day 1 response fields and documented status behavior.
+### Requirement: Login contract is preserved apart from token semantics
+The system MUST preserve the documented `POST /auth/login` endpoint, request behavior, response fields, and status behavior. The token's integrity and verifiability are the only behavior changed by this specification.
 
 #### Scenario: Successful response retains documented fields
 - **WHEN** a login succeeds
-- **THEN** the 200 response retains `token`, `expiresIn`, `user.username`, `user.displayName`, `user.role`, and `debug`
+- **THEN** the 200 response retains `token`, `expiresIn` with its documented nominal value of 3600 seconds, `user.username`, `user.displayName`, `user.role`, and `debug`
 
-#### Scenario: Existing request validation and credential failures
+#### Scenario: Existing request and credential failures
 - **WHEN** the request is null or username or password is missing or blank
 - **THEN** login returns the documented 400 response; when credentials are invalid, login returns the documented 401 response
 

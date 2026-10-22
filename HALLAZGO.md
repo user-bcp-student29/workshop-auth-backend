@@ -1,29 +1,15 @@
-# Hallazgos candidatos — Workshop Auth Backend
+# Hallazgos
 
-Prioridad evaluada para el laboratorio local documentado. Si el servicio se expone fuera de un entorno aislado, revisar la prioridad antes de desplegar. No se ejecutaron pruebas de validación.
+Seguimiento de los casos listados en `RETO.md`. Evidencia referida a rutas relativas a este repositorio. El caso SCA se verificó contra vulnerabilidades conocidas: Commons Text 1.9 reporta CVE-2022-42889 (crítica); Quarkus BOM 3.27.4 no produjo hallazgo en el escaneo.
 
-### Token de autenticación sin firma
-- Estado: CANDIDATO
-- Evidencia: [LegacyTokenUtil.java](src/main/java/com/bcp/workshop/auth/LegacyTokenUtil.java#L9) contiene un secreto fijo y [LegacyTokenUtil.java](src/main/java/com/bcp/workshop/auth/LegacyTokenUtil.java#L13-L16) codifica username, rol, expiración y secreto en Base64. [AuthResource.java](src/main/java/com/bcp/workshop/auth/AuthResource.java#L39-L42) devuelve el valor como `token`.
-- Impacto: los claims de identidad y rol no tienen integridad criptográfica; el token que consume la API puede representar identidad no confiable.
-- Prioridad propuesta: P2 en el entorno local documentado; P1 si se expone.
-- Contrato potencialmente afectado: respuesta de `POST /auth/login` y el token utilizado como Bearer por la API.
-- Cómo validarlo: pruebas de integración deben confirmar el rechazo de tokens con claims alterados, firma inválida o expiración vencida.
+La persona usuaria confirmó H-01 a H-07 el 2026-10-21.
 
-### SQL de autenticación construido con datos interpolados
-- Estado: CANDIDATO
-- Evidencia: [LegacyDatabase.java](src/main/java/com/bcp/workshop/auth/LegacyDatabase.java#L32-L35) concatena usuario y contraseña en una consulta SQL. [LegacyDatabase.java](src/main/java/com/bcp/workshop/auth/LegacyDatabase.java#L22-L24) define la columna password y carga credenciales de laboratorio sin hash.
-- Impacto: la entrada puede alterar la interpretación de la consulta de autenticación; además, las contraseñas guardadas como texto quedan expuestas ante acceso a la base.
-- Prioridad propuesta: P2 en el entorno local documentado; P1 si se expone.
-- Contrato potencialmente afectado: autenticación y respuesta de `POST /auth/login`.
-- Cómo validarlo: probar en entorno aislado que credenciales con caracteres especiales se comparan como datos literales y verificar que el almacenamiento/comparación no requiere contraseñas en texto claro.
-
-## Informe de discovery-analysis — 2026-10-20
-
-### Respuesta de error expone detalles de excepciones
-- Estado: CANDIDATO
-- Evidencia: `src/main/java/com/bcp/workshop/auth/AuthResource.java:54-57` devuelve al cliente `error.getMessage()` y `error.getClass().getName()` en la respuesta HTTP.
-- Impacto: errores internos podrían revelar detalles de implementación o persistencia a quien invoque el endpoint de login.
-- Prioridad propuesta: P2 en el laboratorio local documentado; P1 si se expone fuera de un entorno aislado.
-- Contrato potencialmente afectado: cuerpo de error de `POST /auth/login`, especialmente el campo `message` que el frontend muestra.
-- Cómo validarlo: provocar una excepción controlada en una prueba de integración y comprobar que la respuesta externa sea genérica, conservando el detalle necesario en logs del servidor.
+| id | hallazgo | tipo | explicacion | evidencia (archivo:linea) | severidad | estado |
+|---|---|---|---|---|---|---|
+| H-01 | SCA: Commons Text 1.9 vulnerable; Quarkus BOM 3.27.4 también está fijado y no reportó CVE en el escaneo | Vulnerabilidad | CVE-2022-42889 afecta a Commons Text hasta 1.9 y puede permitir ejecución de código o consultas remotas cuando se usan interpolaciones vulnerables con entradas no confiables. La dependencia declarada mantiene esa versión vulnerable. | `pom.xml:13`, `pom.xml:48-50` | alta | Confirmado |
+| H-02 | Concatenación de credenciales en SQL | Vulnerabilidad | Los valores de usuario y contraseña se insertan directamente en la consulta. Una entrada manipulada puede alterar la condición de autenticación o la consulta ejecutada. | `src/main/java/com/bcp/workshop/auth/LegacyDatabase.java:33` | alta | Confirmado |
+| H-03 | Contraseñas almacenadas en texto plano | Vulnerabilidad | La columna almacena contraseñas sin hash y las cuentas iniciales se insertan con valores literales; una lectura o filtración de la base expone las credenciales reutilizables. | `src/main/java/com/bcp/workshop/auth/LegacyDatabase.java:22-24` | alta | Confirmado |
+| H-04 | Token Base64 con secreto embebido y sin firma | Vulnerabilidad | Base64 solo codifica el contenido: no aporta integridad ni firma. El secreto se incluye en el texto recuperable, por lo que el token puede revelar datos y no acredita criptográficamente sus claims ante consumidores que confíen en él. | `src/main/java/com/bcp/workshop/auth/JwtTokenService.java:11-22`, `src/main/resources/application.properties:9-10` | alta | Confirmado |
+| H-05 | Secreto y CORS hardcodeados/permisivos | Vulnerabilidad | El secreto está definido como constante en el código y la expresión de orígenes `/.*/` permite cualquier origen. Esto dificulta rotar el secreto y amplía qué sitios pueden realizar solicitudes desde navegador. | `src/main/java/com/bcp/workshop/auth/LegacyTokenUtil.java:8`, `src/main/resources/application.properties:4-5` | media | Confirmado |
+| H-06 | La respuesta de error expone detalles internos | Vulnerabilidad | Ante una excepción, la respuesta 500 incluye el mensaje de la excepción y el nombre de su clase; esos detalles pueden revelar información de implementación al cliente. | `src/main/java/com/bcp/workshop/auth/AuthResource.java:54-58` | media | Confirmado |
+| H-07 | `AuthResource.login` acumula validación, negocio, persistencia y armado de respuesta | Refactor | Un único método controla validaciones, llama a persistencia, genera el token y construye respuestas. Los cambios en una responsabilidad pueden afectar las demás y hacen más difícil aislar y probar el flujo. | `src/main/java/com/bcp/workshop/auth/AuthResource.java:24-49` | baja | Confirmado |
