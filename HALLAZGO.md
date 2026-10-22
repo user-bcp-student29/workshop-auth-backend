@@ -1,0 +1,15 @@
+# Hallazgos
+
+Seguimiento de los casos listados en `RETO.md`. Evidencia referida a rutas relativas a este repositorio. El caso SCA se verificó contra vulnerabilidades conocidas: Commons Text 1.9 reporta CVE-2022-42889 (crítica); Quarkus BOM 3.27.4 no produjo hallazgo en el escaneo.
+
+La persona usuaria confirmó H-01 a H-07 el 2026-10-21.
+
+| id | hallazgo | tipo | explicacion | evidencia (archivo:linea) | severidad | estado |
+|---|---|---|---|---|---|---|
+| H-01 | SCA: Commons Text 1.9 vulnerable; Quarkus BOM 3.27.4 también está fijado y no reportó CVE en el escaneo | Vulnerabilidad | CVE-2022-42889 afecta a Commons Text hasta 1.9 y puede permitir ejecución de código o consultas remotas cuando se usan interpolaciones vulnerables con entradas no confiables. La dependencia declarada mantiene esa versión vulnerable. | `pom.xml:13`, `pom.xml:48-50` | alta | Confirmado |
+| H-02 | Concatenación de credenciales en SQL | Vulnerabilidad | Los valores de usuario y contraseña se insertan directamente en la consulta. Una entrada manipulada puede alterar la condición de autenticación o la consulta ejecutada. | `src/main/java/com/bcp/workshop/auth/LegacyDatabase.java:33` | alta | Confirmado |
+| H-03 | Contraseñas almacenadas en texto plano | Vulnerabilidad | La columna almacena contraseñas sin hash y las cuentas iniciales se insertan con valores literales; una lectura o filtración de la base expone las credenciales reutilizables. | `src/main/java/com/bcp/workshop/auth/LegacyDatabase.java:22-24` | alta | Confirmado |
+| H-04 | Token Base64 con secreto embebido y sin firma | Vulnerabilidad | Base64 solo codifica el contenido: no aporta integridad ni firma. El secreto se incluye en el texto recuperable, por lo que el token puede revelar datos y no acredita criptográficamente sus claims ante consumidores que confíen en él. | `src/main/java/com/bcp/workshop/auth/JwtTokenService.java:11-22`, `src/main/resources/application.properties:9-10` | alta | Confirmado |
+| H-05 | Secreto y CORS hardcodeados/permisivos | Vulnerabilidad | El secreto está definido como constante en el código y la expresión de orígenes `/.*/` permite cualquier origen. Esto dificulta rotar el secreto y amplía qué sitios pueden realizar solicitudes desde navegador. | `src/main/java/com/bcp/workshop/auth/LegacyTokenUtil.java:8`, `src/main/resources/application.properties:4-5` | media | Confirmado |
+| H-06 | La respuesta de error expone detalles internos | Vulnerabilidad | Ante una excepción, la respuesta 500 incluye el mensaje de la excepción y el nombre de su clase; esos detalles pueden revelar información de implementación al cliente. | `src/main/java/com/bcp/workshop/auth/AuthResource.java:54-58` | media | Confirmado |
+| H-07 | `AuthResource.login` acumula validación, negocio, persistencia y armado de respuesta | Refactor | Un único método controla validaciones, llama a persistencia, genera el token y construye respuestas. Los cambios en una responsabilidad pueden afectar las demás y hacen más difícil aislar y probar el flujo. | `src/main/java/com/bcp/workshop/auth/AuthResource.java:24-49` | baja | Confirmado |
